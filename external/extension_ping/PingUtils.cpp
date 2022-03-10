@@ -11,13 +11,13 @@
 
 #pragma once
 
-const std::regex IP4_REG("^([0-9]{1,3}\.){3}[0-9]{1,3}$");
+const std::regex IP4_REG("^([0-9]{1,3}\\.){3}[0-9]{1,3}$");
 /*
   This is somewhat arbitrary, imposes a max subdomain chain
   length of 4 and max TLD length of 6. Exact values here would
   probably depend on intended usage
 */
-const std::regex DOMAIN_REG("^([a-zA-z]+\.){1,3}[a-zA-z]{1,6}$");
+const std::regex DOMAIN_REG("^([a-zA-z]+\\.){1,3}[a-zA-z]{1,6}$");
 /*
   Arbitrary data attached to the ICMP request. Included below for the
   sake of tracing.
