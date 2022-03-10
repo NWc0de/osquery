@@ -1,139 +1,54 @@
-# osquery
+# osquery - extension_ping 
 
-<p align="center">
-<img alt="osquery logo" width="200"
-src="https://github.com/osquery/osquery/raw/master/docs/img/logo-2x-dark.png" />
-</p>
+ 
+This repo contains an osquery extension which retrieves the latency for a ping request to either an IPv4 or domain URL. 
 
-<p align="center">
-osquery is a SQL powered operating system instrumentation, monitoring, and analytics framework.
-<br>
-Available for Linux, macOS, Windows, and FreeBSD.
-</p>
 
-## Information and resources
+## Build and Execute 
+ 
 
-- Homepage: [osquery.io](https://osquery.io)
-- Downloads: [osquery.io/downloads](https://osquery.io/downloads)
-- Documentation: [ReadTheDocs](https://osquery.readthedocs.org)
-- Stack Overflow: [Stack Overflow questions](https://stackoverflow.com/questions/tagged/osquery)
-- Table Schema: [osquery.io/schema](https://osquery.io/schema)
-- Query Packs: [osquery.io/packs](https://github.com/osquery/osquery/tree/master/packs)
-- Slack: [Request an auto-invite!](https://join.slack.com/t/osquery/shared_invite/zt-h29zm0gk-s2DBtGUTW4CFel0f0IjTEw)
-- Build Status: [![GitHub Actions Build Status](https://github.com/osquery/osquery/workflows/build/badge.svg)](https://github.com/osquery/osquery/actions?query=workflow%3Abuild+branch%3Amaster) [![Coverity Scan Build Status](https://scan.coverity.com/projects/13317/badge.svg)](https://scan.coverity.com/projects/osquery) [![Documentation Status](https://readthedocs.org/projects/osquery/badge/?version=latest)](https://osquery.readthedocs.io/en/latest/?badge=latest)
-- CII Best Practices: [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/3125/badge)](https://bestpractices.coreinfrastructure.org/projects/3125)
+The extension can be built by cloning this repository and following the steps to build osquery from source included at https://osquery.readthedocs.io/en/stable/development/building/. Notably, if all pre-reqs have been installed
 
-## What is osquery?
+```
+# Using a PowerShell console as Administrator (see note, below)
+# Download source
+git clone https://github.com/osquery/osquery
+cd osquery
 
-osquery exposes an operating system as a high-performance relational database.  This allows you to
-write SQL-based queries to explore operating system data.  With osquery, SQL tables represent
-abstract concepts such as running processes, loaded kernel modules, open network connections,
-browser plugins, hardware events or file hashes.
+# Configure
+mkdir build; cd build
+cmake -G "Visual Studio 16 2019" -A x64 ..
 
-SQL tables are implemented via a simple plugin and extensions API. A variety of tables already exist
-and more are being written: [https://osquery.io/schema](https://osquery.io/schema/). To best
-understand the expressiveness that is afforded to you by osquery, consider the following SQL
-queries:
-
-List the [`users`](https://osquery.io/schema/current#users):
-
-```sql
-SELECT * FROM users;
+# Build
+cmake --build . --config RelWithDebInfo -j10 # Number of projects to build in parallel
 ```
 
-Check the [`processes`](https://osquery.io/schema/current#processes) that have a deleted executable:
+Once built the ping_extension table can be exeucted with osqueryi  
 
-```sql
-SELECT * FROM processes WHERE on_disk = 0;
+``` 
+
+.\osqueryi.exe --extension ..\..\external\RelWithDebInfo\external_extension_ping.ext.exe --allow_unsafe 
+
 ```
 
-Get the process name, port, and PID, for processes listening on all interfaces:
+The above assumes osquery was built with the RelWithDebInfo config and was executed from build\osquery\RelWithDebInfo 
 
-```sql
-SELECT DISTINCT processes.name, listening_ports.port, processes.pid
-  FROM listening_ports JOIN processes USING (pid)
-  WHERE listening_ports.address = '0.0.0.0';
-```
 
-Find every macOS LaunchDaemon that launches an executable and keeps it running:
+--allow_unsafe allows osquery to load the extension from a user-writable directory. This can be omitted if the directory which holds the external_extension_ping.ext.exe is owned by admin. 
 
-```sql
-SELECT name, program || program_arguments AS executable
-  FROM launchd
-  WHERE (run_at_load = 1 AND keep_alive = 1)
-  AND (program != '' OR program_arguments != '');
-```
 
-Check for ARP anomalies from the host's perspective:
+## extension_ping Design 
 
-```sql
-SELECT address, mac, COUNT(mac) AS mac_count
-  FROM arp_cache GROUP BY mac
-  HAVING count(mac) > 1;
-```
 
-Alternatively, you could also use a SQL sub-query to accomplish the same result:
+The design for the table is fairly simple as much of the complexity for the task involves making the ICMP echo request and retrieving the reported latency. In it's current form the extension will make an ICMP echo request to every host specified in the "host" parameter of the query, reporting the latency in ms. There is no attempt at caching, partially because there are already some caching components baked in to osquery itself, and partially because there wasn't time to implement a coherent caching scheme.
 
-```sql
-SELECT address, mac, mac_count
-  FROM
-    (SELECT address, mac, COUNT(mac) AS mac_count FROM arp_cache GROUP BY mac)
-  WHERE mac_count > 1;
-```
 
-These queries can be:
+It may have been wise to implement a small in-memory caching scheme using std::map, or perhaps best would be to have some sort of persistent caching scheme that might have been used to create a true ping "table" using a persistent store like the registry. This level of complexity would likely only be warranted if there were greater volume/performance demands for the table, as this does sort of break the osquery charter of virtual data stores. 
 
-- performed on an ad-hoc basis to explore operating system state using the
-  [osqueryi](https://osquery.readthedocs.org/en/latest/introduction/using-osqueryi/) shell
-- executed via a [scheduler](https://osquery.readthedocs.org/en/latest/introduction/using-osqueryd/)
-  to monitor operating system state across a set of hosts
-- launched from custom applications using osquery Thrift APIs
+ 
+Internally latency is retrieved by calling IcmpSendEcho. Most work here is fairly straightforward, there's a bit of fiddling with WinSock structs and some painful address resolution methods, but for the most part the GetPingLatency method is fairly simple. It would be better to retry on failure in extension_ping\main.cpp since it's possible IcmpSendEcho will time out (the default timeout provided is 10s), but this was omitted as I just didn't have the time to add it. 
 
-## Download & Install
+ 
+## Testing
 
-To download the latest stable builds and for repository information
-and installation instructions visit
-[https://osquery.io/downloads](https://osquery.io/downloads/).
-
-We use a simple numbered versioning scheme `X.Y.Z`, where X is a major version, Y is a minor, and Z is a patch.
-We plan minor releases roughly every two months. These releases are tracked on our [Milestones](https://github.com/osquery/osquery/milestones) page. A patch release is used when there are unforeseen bugs with our minor release and we need to quickly patch.
-A rare 'revision' release might be used if we need to change build configurations.
-
-Major, minor, and patch releases are tagged on GitHub and can be viewed on the [Releases](https://github.com/osquery/osquery/releases) page.
-We open a new [Release Checklist](https://github.com/osquery/osquery/blob/master/.github/ISSUE_TEMPLATE/New_Release.md) issue when we prepare a minor release. If you are interested in the status of a release, please find the corresponding checklist issue, and note that the issue will be marked closed when we are finished the checklist.
-We consider a release 'in testing' during the period of hosting new downloads on our website and adding them to our hosted repositories.
-We will mark the release as 'stable' on GitHub when enough testing has occurred, this usually takes two weeks.
-
-## Build from source
-
-Building osquery from source is encouraged! Check out our [build
-guide](https://osquery.readthedocs.io/en/latest/development/building/). Also
-check out our [contributing guide](CONTRIBUTING.md) and join the
-community on [Slack](https://join.slack.com/t/osquery/shared_invite/zt-h29zm0gk-s2DBtGUTW4CFel0f0IjTEw).
-
-## License
-
-By contributing to osquery you agree that your contributions will be
-licensed as defined on the LICENSE file.
-
-## Vulnerabilities
-
-We keep track of security announcements in our tagged version release
-notes on GitHub. We aggregate these into [SECURITY.md](SECURITY.md)
-too.
-
-## Learn more
-
-The osquery documentation is available
-[online](https://osquery.readthedocs.org). Documentation for older
-releases can be found by version number, [as
-well](https://readthedocs.org/projects/osquery/).
-
-If you're interested in learning more about osquery read the [launch
-blog
-post](https://code.facebook.com/posts/844436395567983/introducing-osquery/)
-for background on the project, visit the [users
-guide](https://osquery.readthedocs.org/).
-
-Development and usage discussion is happening in the osquery Slack, grab an invite
-[here](https://join.slack.com/t/osquery/shared_invite/zt-h29zm0gk-s2DBtGUTW4CFel0f0IjTEw)!
+The PingUtils::GetPingLatency function is covered in ad-hoc unit tests included in https://github.com/NWc0de/PingStats (PingStats.cpp). It would've been much better to use a framework like GTest but alas I didn't have time to mock them up properly, so I had to ship the ad-hoc tests I used in VS Studio while working the PingUtils methods. These can be built and executed via VS Studio on any recent Windows host (tested with VS Studio 2019).
