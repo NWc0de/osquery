@@ -1,13 +1,13 @@
 # osquery - extension_ping 
 
  
-This repo contains an osquery extension which retrieves the latency for a ping request to either an IPv4 or domain URL. 
+This repo contains an osquery extension which retrieves the latency of a ping request to either an IPv4 address or DNS URL (see source @ external/extension_ping)
 
 
 ## Build and Execute 
  
 
-The extension can be built by cloning this repository and following the steps to build osquery from source included at https://osquery.readthedocs.io/en/stable/development/building/. Notably, if all pre-reqs have been installed
+The extension can be built by cloning this repository and following the steps to build osquery from source included at https://osquery.readthedocs.io/en/stable/development/building/. Specifically, if all pre-reqs have been installed
 
 ```
 # Using a PowerShell console as Administrator (see note, below)
@@ -52,3 +52,6 @@ Internally latency is retrieved by calling IcmpSendEcho. Most work here is fairl
 ## Testing
 
 The PingUtils::GetPingLatency function is covered in ad-hoc unit tests included in https://github.com/NWc0de/PingStats (PingStats.cpp). It would've been much better to use a framework like GTest but alas I didn't have time to mock them up properly, so I had to ship the ad-hoc tests I used in VS Studio while working the PingUtils methods. These can be built and executed via VS Studio on any recent Windows host (tested with VS Studio 2019).
+
+
+FWIW it looks like Git mangled the formatting on these unfortunately (seems to have converted tabs to spaces in a wierd fashion). The guidelines for building osquery suggested check out and check in "as is" on the Git for Windows installation option, I suspect that might have caused the unusual spacing in the extension_ping source files.
